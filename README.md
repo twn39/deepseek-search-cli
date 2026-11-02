@@ -3,7 +3,7 @@
 <p align="left">
   <a href="https://pypi.org/project/deepseek-search-cli/"><img src="https://img.shields.io/pypi/v/deepseek-search-cli?color=blue&logo=pypi&logoColor=white" alt="PyPI - Version"></a>
   <a href="https://pypi.org/project/deepseek-search-cli/"><img src="https://img.shields.io/pypi/pyversions/deepseek-search-cli?logo=python&logoColor=white" alt="PyPI - Python Version"></a>
-  <a href="https://github.com/twn39/deepseek-search/releases"><img src="https://img.shields.io/github/v/release/twn39/deepseek-search?logo=github" alt="GitHub Release"></a>
+  <a href="https://github.com/twn39/deepseek-search-cli/releases"><img src="https://img.shields.io/github/v/release/twn39/deepseek-search-cli?logo=github" alt="GitHub Release"></a>
   <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-green.svg" alt="License: MIT"></a>
   <a href="https://github.com/astral-sh/ruff"><img src="https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json" alt="Ruff"></a>
   <a href="skills/deepseek-search/SKILL.md"><img src="https://img.shields.io/badge/Agent%20Skills-Ready-8A2BE2" alt="Agent Skills"></a>

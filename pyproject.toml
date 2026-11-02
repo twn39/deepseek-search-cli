@@ -51,9 +51,9 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/twn39/deepseek-search"
-Repository = "https://github.com/twn39/deepseek-search"
-Issues = "https://github.com/twn39/deepseek-search/issues"
+Homepage = "https://github.com/twn39/deepseek-search-cli"
+Repository = "https://github.com/twn39/deepseek-search-cli"
+Issues = "https://github.com/twn39/deepseek-search-cli/issues"
 Documentation = "https://api-docs.deepseek.com/zh-cn/guides/search"
 
 [project.scripts]

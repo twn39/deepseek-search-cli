@@ -40,7 +40,7 @@ codegraph build . -e .venv -e dist
 ## 3. Project Layout & Architecture
 
 ```
-deepseek-search/
+deepseek-search-cli/
 ├── src/deepseek_search_cli/
 │   ├── __init__.py      # Public exports: DeepSeekClient, SearchResult, etc.
 │   ├── client.py        # Network client: connection pooling, Bearer auth, retry backoff
