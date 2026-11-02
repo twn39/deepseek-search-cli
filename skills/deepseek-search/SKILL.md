@@ -3,7 +3,7 @@ name: deepseek-search
 description: Search the live web and extract clean Markdown content using DeepSeek Search and Fetch APIs. Use when the user asks to search the web (搜索, 网络搜索, 查资料, 检索最新信息), look up real-time news, documentation or benchmarks, or fetch/scrape web page content into structured Markdown.
 compatibility: Python 3.11+, deepseek-search CLI
 metadata:
-  version: 1.0.0
+  version: 1.0.1
   tags:
     - search
     - web-retrieval

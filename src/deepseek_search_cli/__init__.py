@@ -1,6 +1,6 @@
 """DeepSeek Search and Fetch CLI tool based on httpx and typer."""
 
-__version__ = "1.0.0"
+__version__ = "1.0.1"
 
 from deepseek_search_cli.client import (
     DeepSeekAPIError,
