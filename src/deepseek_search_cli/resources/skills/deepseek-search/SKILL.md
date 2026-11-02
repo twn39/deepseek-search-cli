@@ -60,7 +60,7 @@ Operators can be written directly in the query or via dedicated flags:
 - `site:domain.com`: Restrict to domain (e.g. `--site github.com`).
 - `-site:domain.com`: Exclude domain (e.g. `--exclude-site csdn.net`).
 - Persistent Blacklist:
-  - Apply curated default blacklist: `deepseek-search config blacklist default` (excludes `csdn.net`, `jb51.net`, `360doc.com`, `baidu.com`)
+  - Apply curated default blacklist: `deepseek-search config blacklist default` (excludes `csdn.net` to minimize operator length footprint)
   - Add domain: `deepseek-search config blacklist add csdn.net` (automatically appended to all future searches)
   - List domains: `deepseek-search config blacklist list`
   - Clear domains: `deepseek-search config blacklist clear`

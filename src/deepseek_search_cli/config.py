@@ -8,9 +8,6 @@ from typing import Any
 DEFAULT_BASE_URL = "https://api.deepseek.com"
 DEFAULT_BLACKLIST: list[str] = [
     "csdn.net",
-    "jb51.net",
-    "360doc.com",
-    "baidu.com",
 ]
 
 
