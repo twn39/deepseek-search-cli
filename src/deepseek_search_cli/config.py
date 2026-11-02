@@ -10,7 +10,7 @@ DEFAULT_BLACKLIST: list[str] = [
     "csdn.net",
     "jb51.net",
     "360doc.com",
-    "baijiahao.baidu.com",
+    "baidu.com",
 ]
 
 
