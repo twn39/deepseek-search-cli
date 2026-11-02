@@ -6,6 +6,12 @@ from pathlib import Path
 from typing import Any
 
 DEFAULT_BASE_URL = "https://api.deepseek.com"
+DEFAULT_BLACKLIST: list[str] = [
+    "csdn.net",
+    "jb51.net",
+    "360doc.com",
+    "baijiahao.baidu.com",
+]
 
 
 def get_config_dir() -> Path:
@@ -226,3 +232,9 @@ def clear_blacklist() -> None:
         del cfg["exclude_sites"]
         config_file = get_config_file()
         config_file.write_text(json.dumps(cfg, indent=2, ensure_ascii=False), encoding="utf-8")
+
+
+def set_default_blacklist() -> list[str]:
+    """Set the global blacklist to the recommended default list."""
+    save_file_config({"exclude_sites": list(DEFAULT_BLACKLIST)})
+    return list(DEFAULT_BLACKLIST)

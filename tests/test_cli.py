@@ -14,6 +14,20 @@ runner = CliRunner()
 
 
 class TestCLI(unittest.TestCase):
+    def setUp(self):
+        super().setUp()
+        self._temp_dir = tempfile.TemporaryDirectory()
+        self.addCleanup(self._temp_dir.cleanup)
+        self._env_patcher = patch.dict(
+            "os.environ",
+            {
+                "XDG_CONFIG_HOME": self._temp_dir.name,
+                "DEEPSEEK_EXCLUDE_SITES": "",
+            },
+        )
+        self._env_patcher.start()
+        self.addCleanup(self._env_patcher.stop)
+
     def test_version_flag(self):
         result = runner.invoke(app, ["--version"])
         self.assertEqual(result.exit_code, 0)
@@ -447,6 +461,12 @@ class TestCLI(unittest.TestCase):
         res_clear = runner.invoke(app, ["config", "blacklist", "clear"])
         self.assertEqual(res_clear.exit_code, 0)
         mock_clear.assert_called_once()
+
+        # 5. default
+        with patch("deepseek_search_cli.cli.set_default_blacklist", return_value=["csdn.net"]):
+            res_default = runner.invoke(app, ["config", "blacklist", "default"])
+            self.assertEqual(res_default.exit_code, 0)
+            self.assertIn("成功应用推荐默认黑名单", res_default.output)
 
 
 if __name__ == "__main__":

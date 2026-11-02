@@ -15,6 +15,7 @@ from deepseek_search_cli.client import (
     DeepSeekClient,
 )
 from deepseek_search_cli.config import (
+    DEFAULT_BLACKLIST,
     add_to_blacklist,
     clean_domain_name,
     clear_blacklist,
@@ -27,6 +28,7 @@ from deepseek_search_cli.config import (
     resolve_blacklist,
     save_file_config,
     save_local_env,
+    set_default_blacklist,
 )
 from deepseek_search_cli.formatters import (
     console,
@@ -734,7 +736,7 @@ def blacklist_main(ctx: typer.Context) -> None:
         if not blacklist:
             console.print("[yellow]当前未配置任何排除站点黑名单。[/yellow]")
             console.print(
-                "[dim]提示: 可运行 'deepseek-search config blacklist add <domain>' 添加排除站点。[/dim]"
+                "[dim]提示: 可运行 'deepseek-search config blacklist default' 一键应用推荐黑名单。[/dim]"
             )
             return
 
@@ -794,6 +796,18 @@ def blacklist_remove(
 def blacklist_clear() -> None:
     clear_blacklist()
     console.print("[bold green]✓ 站点黑名单已清空。[/bold green]")
+
+
+@blacklist_app.command(
+    "default",
+    help=f"一键应用推荐默认黑名单 ({', '.join(DEFAULT_BLACKLIST)})",
+)
+def blacklist_default() -> None:
+    sites = set_default_blacklist()
+    console.print(f"[bold green]✓ 成功应用推荐默认黑名单 ({len(sites)} 个)：[/bold green]")
+    for s in sites:
+        console.print(f"  • [red]-site:{s}[/red]")
+    console.print(f"[dim]已保存至 {get_config_file()}，后续搜索将默认自动排除上述站点。[/dim]")
 
 
 def main() -> None:

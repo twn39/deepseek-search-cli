@@ -250,6 +250,15 @@ class TestDeepSeekClient(unittest.TestCase):
             bl = resolve_blacklist()
             self.assertEqual(bl, ["csdn.net", "zhihu.com"])
 
+    def test_default_blacklist(self):
+        from deepseek_search_cli.config import DEFAULT_BLACKLIST, set_default_blacklist
+
+        self.assertIn("csdn.net", DEFAULT_BLACKLIST)
+        with patch("deepseek_search_cli.config.save_file_config") as mock_save:
+            res = set_default_blacklist()
+            self.assertEqual(res, DEFAULT_BLACKLIST)
+            mock_save.assert_called_once_with({"exclude_sites": DEFAULT_BLACKLIST})
+
 
 if __name__ == "__main__":
     unittest.main()
