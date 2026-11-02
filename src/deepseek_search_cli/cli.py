@@ -807,9 +807,7 @@ def blacklist_default() -> None:
     console.print(f"[bold green]✓ 成功应用推荐默认黑名单 ({len(sites)} 个)：[/bold green]")
     for s in sites:
         console.print(f"  • [red]-site:{s}[/red]")
-    console.print(
-        f"[dim]已保存至 {get_config_file()}，后续搜索将默认自动排除上述站点。[/dim]"
-    )
+    console.print(f"[dim]已保存至 {get_config_file()}，后续搜索将默认自动排除上述站点。[/dim]")
 
 
 def main() -> None:
