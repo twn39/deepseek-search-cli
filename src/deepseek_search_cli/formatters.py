@@ -167,6 +167,11 @@ def format_search_results_json(response: SearchResponse) -> str:
     return json.dumps(response.to_dict(), indent=2, ensure_ascii=False)
 
 
+def format_search_results_urls(response: SearchResponse) -> str:
+    """Format search results as plain newline-delimited URLs for easy Unix pipeline chaining."""
+    return "\n".join(item.url for item in response.results if item.url)
+
+
 def format_fetch_result_rich(
     fetch: FetchResponse,
     url: str,

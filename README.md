@@ -131,6 +131,12 @@ deepseek-search search "DeepSeek V4" --format rich
 # 切换为表格视图 (table)
 deepseek-search search "量子计算" --format table
 
+# 输出纯 URL 列表 (urls) - 极度适合与管道协同
+deepseek-search search "DeepSeek" --format urls
+
+# 优雅的 Unix 管道：搜索并直接并发抓取前 3 个网页全文
+deepseek-search search "DeepSeek V4" -c 3 -f urls | deepseek-search fetch -
+
 # 输出 JSON 格式供脚本处理
 deepseek-search search "DeepSeek" --format json
 
@@ -145,11 +151,11 @@ deepseek-search search "AI Agent" --output agent_search.md
 Fetch 接口抓取目标网页，并以清洁的 Markdown 格式返回。
 
 ```bash
-# 抓取单个网页并在终端以高亮富文本渲染
-deepseek-search fetch "https://api-docs.deepseek.com/zh-cn/guides/search"
+# 抓取单个网页（支持自动补齐 https://，可省略前缀）
+deepseek-search fetch "deepseek.com"
 
-# 管道支持：通过 stdin 按行接收 URL 进行批量抓取（stdout 纯净无杂质，利于下游重定向或管道）
-echo "https://api-docs.deepseek.com/zh-cn/guides/search" | deepseek-search fetch - --format raw
+# 管道支持：通过 stdin 按行接收 URL 进行并发批量抓取（多 URL 默认最多 5 并发）
+cat urls.txt | deepseek-search fetch - --format raw
 
 # 输出原始 Markdown 纯文本
 deepseek-search fetch "https://example.com/article" --format raw
@@ -166,10 +172,10 @@ deepseek-search fetch "https://example.com/article" --format json
 ## 🐍 作为 Python SDK 调用
 
 ```python
-from deepseek_search_cli import DeepSeekClient
+from deepseek_search_cli import DeepSeekClient, normalize_url
 
 with DeepSeekClient(api_key="sk-your-key") as client:
-    # 1. 搜索
+    # 1. 网页搜索 (如需一步获取全文正文，可传 need_content=True)
     search_res = client.search(
         query="DeepSeek V4 site:github.com",
         count=5,
@@ -177,6 +183,17 @@ with DeepSeekClient(api_key="sk-your-key") as client:
     )
     for item in search_res.results:
         print(f"[{item.rerank_score}] {item.title}: {item.url}")
+
+    # 2. 单个网页抓取
+    fetch_res = client.fetch("deepseek.com")
+    print(fetch_res.title, len(fetch_res.content))
+
+    # 3. 并发批量抓取 (多线程并发并保序，默认 max_workers=5)
+    urls = ["https://example.com/1", "https://example.com/2"]
+    batch_results = client.fetch_many(urls, max_workers=5)
+    for url, res in batch_results:
+        if not isinstance(res, Exception):
+            print(f"抓取成功: {url} -> {res.title}")
         print(f"摘要: {item.summary}\n")
 
     # 2. 抓取网页 Markdown

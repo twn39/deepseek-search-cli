@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import concurrent.futures
 import json
 import os
 import random
 import re
 import time
+from collections.abc import Sequence
 from typing import Any, Self
 
 import httpx
@@ -48,6 +50,28 @@ class DeepSeekAPIError(Exception):
         self.error_code = error_code
         doc_hint = STATUS_CODE_MESSAGES.get(status_code, "请检查请求与服务状态。")
         super().__init__(f"[{status_code}] {message} ({doc_hint})")
+
+
+def normalize_url(url: str) -> str:
+    """Normalize and validate a URL for DeepSeek Fetch API.
+
+    - Strips leading/trailing whitespace.
+    - Prepends 'https://' if the URL scheme is omitted (e.g. 'github.com/foo' -> 'https://github.com/foo').
+    - Enforces length limit (<= 8192 chars) and HTTP/HTTPS host validity without user/password.
+    """
+    clean_url = url.strip()
+    if not clean_url:
+        raise ValueError("抓取网页 url 不能为空。")
+    if len(clean_url) > 8192:
+        raise ValueError(f"url 长度超过 8192 个字符（当前 {len(clean_url)} 个字符）。")
+
+    if not clean_url.startswith(("http://", "https://")):
+        clean_url = f"https://{clean_url}"
+
+    if not re.match(r"^https?://([^/@:]+)(:\d+)?(/.*)?$", clean_url):
+        raise ValueError("url 必须为含 host 的合法 HTTP/HTTPS URL，且不能包含用户名或密码。")
+
+    return clean_url
 
 
 class DeepSeekClient:
@@ -135,6 +159,7 @@ class DeepSeekClient:
         """Send POST request with lightweight exponential backoff for transient idempotent errors."""
         last_exc: Exception | None = None
         for attempt in range(self.max_retries + 1):
+            resp: httpx.Response | None = None
             try:
                 resp = self._client.post(path, json=json_payload)
                 if resp.status_code not in RETRYABLE_STATUS_CODES or attempt == self.max_retries:
@@ -146,11 +171,20 @@ class DeepSeekClient:
 
             # Exponential backoff with jitter (e.g. 0.5s -> 1.0s -> ...)
             backoff = (0.5 * (2**attempt)) + random.uniform(0.05, 0.25)
+            if resp is not None and resp.status_code == 429:
+                retry_after = resp.headers.get("retry-after")
+                if retry_after:
+                    try:
+                        backoff = max(float(retry_after), backoff)
+                    except ValueError:
+                        pass
             time.sleep(backoff)
 
         if last_exc:
             raise last_exc
-        return resp  # type: ignore[unreachable]
+        if resp is None:
+            raise RuntimeError("请求未执行或未能获取响应。")
+        return resp
 
     def _handle_response(self, response: httpx.Response) -> dict[str, Any]:
         """Parse response and handle API errors."""
@@ -240,19 +274,48 @@ class DeepSeekClient:
         """Fetch a webpage using DeepSeek Fetch API (POST /v1/tools/fetch).
 
         Args:
-            url: 要抓取的网页地址，含 host 的 HTTP/HTTPS URL，不超过 8192 字符，无用户名/密码。
+            url: 要抓取的网页地址，含 host 的 HTTP/HTTPS URL (若省略协议会自动补齐 https://)。
         """
-        clean_url = url.strip()
-        if not clean_url:
-            raise ValueError("抓取网页 url 不能为空。")
-        if len(clean_url) > 8192:
-            raise ValueError(f"url 长度超过 8192 个字符（当前 {len(clean_url)} 个字符）。")
-
-        # URL format check: must start with http:// or https://, have host, no user:pass@
-        if not re.match(r"^https?://([^/@:]+)(:\d+)?(/.*)?$", clean_url):
-            raise ValueError("url 必须为含 host 的 HTTP/HTTPS URL，且不能包含用户名或密码。")
-
+        clean_url = normalize_url(url)
         payload = {"url": clean_url}
         resp = self._post_with_retry("/v1/tools/fetch", json_payload=payload)
         data = self._handle_response(resp)
         return FetchResponse.from_dict(data)
+
+    def fetch_many(
+        self,
+        urls: Sequence[str],
+        max_workers: int = 5,
+    ) -> list[tuple[str, FetchResponse | Exception]]:
+        """Fetch multiple webpages concurrently using a lightweight thread pool.
+
+        Maintains the exact original order of URLs in the returned list.
+        Each element is a tuple of (clean_url, FetchResponse or Exception).
+
+        Args:
+            urls: 要抓取的网页地址列表。
+            max_workers: 最大并发抓取线程数 (默认 5，建议不超过 DeepSeek 25 QPS 阈值)。
+        """
+        if not urls:
+            return []
+
+        url_list = list(urls)
+        placeholder_err = RuntimeError("未完成抓取")
+        results: list[tuple[str, FetchResponse | Exception]] = [
+            ("", placeholder_err) for _ in url_list
+        ]
+
+        def _worker(idx: int, target_url: str) -> None:
+            clean = target_url.strip()
+            try:
+                res = self.fetch(clean)
+                results[idx] = (normalize_url(clean), res)
+            except Exception as exc:  # noqa: BLE001
+                results[idx] = (clean, exc)
+
+        workers = min(max(1, max_workers), len(url_list))
+        with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as executor:
+            futures = [executor.submit(_worker, i, u) for i, u in enumerate(url_list)]
+            concurrent.futures.wait(futures)
+
+        return results

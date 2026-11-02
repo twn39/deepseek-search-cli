@@ -88,9 +88,23 @@ deepseek-search/
 
 ---
 
-## 6. Codebase Knowledge Graph Guidelines (`codegraph`)
+## 6. Definition of Done (DoD)
+
+Before declaring a task completed:
+1. [ ] Code changes adhere to Python 3.11 ~ 3.14 compatibility.
+2. [ ] `uv run python -m unittest discover tests -v` passes (all 25 tests pass).
+3. [ ] `uv run ruff check .` reports 0 errors.
+4. [ ] `uv run ruff format --check .` passes cleanly.
+5. [ ] `uv run ty check` reports "All checks passed!".
+6. [ ] Knowledge graph is updated via `codegraph build . -e .venv -e dist`.
+
+## codegraph-gen
 
 This project maintains a codebase knowledge graph at `.codegraph/`.
+
+### Guidelines for AI Agents (Antigravity, Claude Code, Cursor, Roo Code, etc.)
+
+You MUST follow these rules when working in this codebase:
 
 1. **Prioritize the Knowledge Graph**:
    - Before answering architecture, design, or codebase structure questions, you **MUST** read [.codegraph/README.md](.codegraph/README.md) to understand the system overview, god nodes, and logical community structure.
@@ -102,16 +116,4 @@ This project maintains a codebase knowledge graph at `.codegraph/`.
 
 3. **Keep Graph Sync'd**:
    - Whenever you create, delete, or modify code files, you **SHOULD** remind the user to run `codegraph build .` to rebuild the knowledge graph and keep it current.
-   - Always exclude `.venv` and `dist` when running the build command: `codegraph build . -e .venv -e dist`.
-
----
-
-## 7. Definition of Done (DoD)
-
-Before declaring a task completed:
-1. [ ] Code changes adhere to Python 3.11 ~ 3.14 compatibility.
-2. [ ] `uv run python -m unittest discover tests -v` passes (all 25 tests pass).
-3. [ ] `uv run ruff check .` reports 0 errors.
-4. [ ] `uv run ruff format --check .` passes cleanly.
-5. [ ] `uv run ty check` reports "All checks passed!".
-6. [ ] Knowledge graph is updated via `codegraph build . -e .venv -e dist`.
+   - When running the build command, exclude irrelevant or generated directories (e.g., third-party dependencies, build folders, or documentation) using the `-e`/`--exclude` flag to keep the graph focused and clean (e.g., `codegraph build . -e third_party/`).

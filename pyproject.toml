@@ -64,6 +64,27 @@ ds-search = "deepseek_search_cli.cli:main"
 requires = ["uv_build>=0.12.10,<0.13.0"]
 build-backend = "uv_build"
 
+[tool.uv.build-backend]
+module-root = "src"
+module-name = "deepseek_search_cli"
+default-excludes = true
+source-include = [
+    "tests/**",
+    "README.md",
+    "pyproject.toml",
+]
+source-exclude = [
+    ".codegraph/**",
+    ".ruff_cache/**",
+    ".env*",
+    "*.log",
+]
+wheel-exclude = [
+    "*.pyc",
+    "*.pyo",
+    "__pycache__/**",
+]
+
 [tool.ruff]
 target-version = "py311"
 line-length = 100

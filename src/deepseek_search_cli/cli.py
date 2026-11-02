@@ -32,6 +32,7 @@ from deepseek_search_cli.formatters import (
     format_search_results_markdown,
     format_search_results_rich,
     format_search_results_table,
+    format_search_results_urls,
     status_spinner,
 )
 from deepseek_search_cli.models import FetchResponse
@@ -52,6 +53,7 @@ class SearchFormat(StrEnum):
     TABLE = "table"
     MARKDOWN = "markdown"
     JSON = "json"
+    URLS = "urls"
 
 
 class FetchFormat(StrEnum):
@@ -226,6 +228,17 @@ def search_command(
         before=before,
     )
 
+    if len(final_query) > 128:
+        base_len = len(query.strip())
+        ops_len = len(final_query) - base_len
+        err_console.print(
+            f"[bold red]错误:[/bold red] 搜索语句总长度为 {len(final_query)} 个字符，超过 DeepSeek 128 字符上限！\n"
+            f"  • 原始关键词: {base_len} 字符 ('{query.strip()}')\n"
+            f"  • 过滤操作符: {ops_len} 字符\n"
+            f"[yellow]建议:[/yellow] 请精简关键词或减少 --site / --exclude-site 等过滤参数。"
+        )
+        raise typer.Exit(code=1)
+
     try:
         client = DeepSeekClient(
             api_key=api_key,
@@ -242,7 +255,7 @@ def search_command(
                 response = active_client.search(
                     query=final_query,
                     count=count,
-                    need_content=need_content or (fetch_top > 0),
+                    need_content=need_content,
                     ori_question=ori_question,
                     localization=localization,
                 )
@@ -253,13 +266,23 @@ def search_command(
                 with status_spinner(
                     f"[cyan]正在深度抓取前 {len(top_targets)} 个网页正文...[/cyan]"
                 ):
-                    for r in top_targets:
+                    if len(top_targets) == 1:
+                        target = top_targets[0]
                         try:
-                            fetch_res = active_client.fetch(r.url)
+                            fetch_res = active_client.fetch(target.url)
                             if fetch_res.content.strip():
-                                r.content = fetch_res.content
+                                target.content = fetch_res.content
                         except Exception as e:  # noqa: BLE001
-                            r.content = f"(网页抓取失败: {e})"
+                            target.content = f"(网页抓取失败: {e})"
+                    else:
+                        target_urls = [r.url for r in top_targets]
+                        fetch_results = active_client.fetch_many(target_urls, max_workers=5)
+                        for r, (_, res) in zip(top_targets, fetch_results, strict=False):
+                            if isinstance(res, FetchResponse):
+                                if res.content.strip():
+                                    r.content = res.content
+                            elif isinstance(res, Exception):
+                                r.content = f"(网页抓取失败: {res})"
         except DeepSeekAPIError as e:
             err_console.print(
                 f"[bold red]API 请求失败 (HTTP {e.status_code}):[/bold red] {e.message}"
@@ -273,6 +296,7 @@ def search_command(
 
     # Render format
     show_full_content = need_content or (fetch_top > 0)
+    save_content: str | None = None
     if format_ == SearchFormat.RICH:
         format_search_results_rich(
             response=response,
@@ -282,27 +306,33 @@ def search_command(
     elif format_ == SearchFormat.TABLE:
         format_search_results_table(response=response)
     elif format_ == SearchFormat.MARKDOWN:
-        md_text = format_search_results_markdown(
+        save_content = format_search_results_markdown(
             response=response,
             show_summary=show_summary,
             show_content=show_full_content,
         )
-        console.print(md_text, highlight=False)
+        console.print(save_content, highlight=False)
     elif format_ == SearchFormat.JSON:
-        json_text = format_search_results_json(response)
-        console.print(json_text)
+        save_content = format_search_results_json(response)
+        console.print(save_content)
+    elif format_ == SearchFormat.URLS:
+        save_content = format_search_results_urls(response)
+        console.print(save_content, highlight=False)
 
     # Save to file if requested
     if output:
         try:
-            if format_ == SearchFormat.JSON:
-                save_content = format_search_results_json(response)
-            else:
-                save_content = format_search_results_markdown(
-                    response=response,
-                    show_summary=show_summary,
-                    show_content=show_full_content,
-                )
+            if save_content is None:
+                if format_ == SearchFormat.JSON:
+                    save_content = format_search_results_json(response)
+                elif format_ == SearchFormat.URLS:
+                    save_content = format_search_results_urls(response)
+                else:
+                    save_content = format_search_results_markdown(
+                        response=response,
+                        show_summary=show_summary,
+                        show_content=show_full_content,
+                    )
             output.parent.mkdir(parents=True, exist_ok=True)
             output.write_text(save_content, encoding="utf-8")
             err_console.print(f"\n[bold green]✓ 结果已保存至:[/bold green] {output.resolve()}")
@@ -373,7 +403,7 @@ def fetch_command(
                 "[bold red]错误:[/bold red] 请提供要抓取的网页 URL，或通过管道传入 URL。"
             )
             raise typer.Exit(code=1)
-        for line in sys.stdin.read().splitlines():
+        for line in sys.stdin:
             line_str = line.strip()
             if line_str and not line_str.startswith("#"):
                 target_urls.append(line_str)
@@ -394,7 +424,8 @@ def fetch_command(
 
     results: list[tuple[str, FetchResponse]] = []
     with client as active_client:
-        for u in target_urls:
+        if len(target_urls) == 1:
+            u = target_urls[0]
             try:
                 with status_spinner(f"[cyan]正在抓取网页: {u}...[/cyan]"):
                     fetch_res = active_client.fetch(url=u)
@@ -403,12 +434,24 @@ def fetch_command(
                 err_console.print(
                     f"[bold red]API 请求失败 ({u} - HTTP {e.status_code}):[/bold red] {e.message}"
                 )
-                if len(target_urls) == 1:
-                    raise typer.Exit(code=1)
+                raise typer.Exit(code=1)
             except Exception as e:  # noqa: BLE001
                 err_console.print(f"[bold red]抓取出错 ({u}):[/bold red] {e}")
-                if len(target_urls) == 1:
-                    raise typer.Exit(code=1)
+                raise typer.Exit(code=1)
+        else:
+            with status_spinner(
+                f"[cyan]正在并发抓取 {len(target_urls)} 个网页 (最多 5 并发)...[/cyan]"
+            ):
+                batch_res = active_client.fetch_many(target_urls, max_workers=5)
+            for orig_u, res in batch_res:
+                if isinstance(res, FetchResponse):
+                    results.append((orig_u, res))
+                elif isinstance(res, DeepSeekAPIError):
+                    err_console.print(
+                        f"[bold red]API 请求失败 ({orig_u} - HTTP {res.status_code}):[/bold red] {res.message}"
+                    )
+                elif isinstance(res, Exception):
+                    err_console.print(f"[bold red]抓取出错 ({orig_u}):[/bold red] {res}")
 
     if not results:
         err_console.print("[bold red]所有网页抓取均失败。[/bold red]")

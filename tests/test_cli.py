@@ -239,6 +239,12 @@ class TestCLI(unittest.TestCase):
             title="管道抓取",
             content="# 管道正文",
         )
+        mock_instance.fetch_many.side_effect = lambda urls, max_workers=5: [
+            (u, mock_instance.fetch(u)) for u in urls
+        ]
+        mock_instance.fetch_many.side_effect = lambda urls, max_workers=5: [
+            (u, mock_instance.fetch(u)) for u in urls
+        ]
 
         result = runner.invoke(
             app,
@@ -296,6 +302,90 @@ class TestCLI(unittest.TestCase):
         result = runner.invoke(app, ["config", "logout"])
         self.assertEqual(result.exit_code, 0)
         self.assertIn("已清除", result.output)
+
+    @patch("deepseek_search_cli.cli.DeepSeekClient")
+    def test_search_command_urls_format(self, mock_client_cls):
+        mock_instance = mock_client_cls.return_value
+        mock_instance.__enter__.return_value = mock_instance
+        mock_instance.search.return_value = SearchResponse(
+            results=[
+                SearchResult(
+                    rerank_score=2.0,
+                    title="结果1",
+                    url="https://example.com/item1",
+                    snippet="",
+                    summary="",
+                ),
+                SearchResult(
+                    rerank_score=1.8,
+                    title="结果2",
+                    url="https://example.com/item2",
+                    snippet="",
+                    summary="",
+                ),
+            ]
+        )
+
+        result = runner.invoke(
+            app,
+            ["search", "测试", "--format", "urls", "--api-key", "sk-dummy"],
+        )
+        self.assertEqual(result.exit_code, 0)
+        expected_output = "https://example.com/item1\nhttps://example.com/item2\n"
+        self.assertEqual(result.stdout, expected_output)
+
+    def test_search_query_too_long(self):
+        result = runner.invoke(
+            app,
+            [
+                "search",
+                "a" * 120,
+                "--site",
+                "very-long-domain-name-that-definitely-exceeds-the-limit.com",
+            ],
+        )
+        self.assertEqual(result.exit_code, 1)
+        self.assertIn("超过 DeepSeek 128 字符上限", result.output)
+
+    @patch("deepseek_search_cli.cli.DeepSeekClient")
+    def test_search_with_fetch_top_multi(self, mock_client_cls):
+        mock_instance = mock_client_cls.return_value
+        mock_instance.__enter__.return_value = mock_instance
+        mock_instance.search.return_value = SearchResponse(
+            results=[
+                SearchResult(
+                    rerank_score=2.8,
+                    title="结果1",
+                    url="https://example.com/1",
+                    snippet="",
+                    summary="",
+                ),
+                SearchResult(
+                    rerank_score=2.5,
+                    title="结果2",
+                    url="https://example.com/2",
+                    snippet="",
+                    summary="",
+                ),
+            ]
+        )
+        mock_instance.fetch_many.return_value = [
+            ("https://example.com/1", FetchResponse(title="详情1", content="正文1")),
+            ("https://example.com/2", FetchResponse(title="详情2", content="正文2")),
+        ]
+
+        result = runner.invoke(
+            app,
+            ["search", "test", "--fetch-top", "2", "--format", "json", "--api-key", "sk-dummy"],
+        )
+        self.assertEqual(result.exit_code, 0)
+        data = json.loads(result.stdout)
+        self.assertEqual(data["results"][0]["content"], "正文1")
+        self.assertEqual(data["results"][1]["content"], "正文2")
+        mock_instance.fetch_many.assert_called_once_with(
+            ["https://example.com/1", "https://example.com/2"],
+            max_workers=5,
+        )
 
 
 if __name__ == "__main__":

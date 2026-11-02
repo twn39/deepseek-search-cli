@@ -4,7 +4,12 @@ from unittest.mock import patch
 
 import httpx
 
-from deepseek_search_cli.client import DeepSeekAPIError, DeepSeekClient
+from deepseek_search_cli.client import (
+    DeepSeekAPIError,
+    DeepSeekClient,
+    normalize_url,
+)
+from deepseek_search_cli.models import FetchResponse
 
 
 class TestDeepSeekClient(unittest.TestCase):
@@ -140,6 +145,90 @@ class TestDeepSeekClient(unittest.TestCase):
             calls += 1
             if calls == 1:
                 return httpx.Response(429, json={"error": {"message": "Rate limit exceeded"}})
+            return httpx.Response(200, json={"results": []})
+
+        transport = httpx.MockTransport(mock_transport)
+        with httpx.Client(transport=transport, base_url="https://api.deepseek.com") as http_client:
+            client = DeepSeekClient(api_key="sk-test", client=http_client, max_retries=1)
+            res = client.search("test")
+            self.assertEqual(len(res.results), 0)
+            self.assertEqual(calls, 2)
+
+    def test_normalize_url(self):
+        self.assertEqual(normalize_url("example.com"), "https://example.com")
+        self.assertEqual(normalize_url("example.com/doc"), "https://example.com/doc")
+        self.assertEqual(normalize_url("http://example.com"), "http://example.com")
+        self.assertEqual(normalize_url("https://example.com"), "https://example.com")
+        with self.assertRaises(ValueError):
+            normalize_url("")
+        with self.assertRaises(ValueError):
+            normalize_url("   ")
+        with self.assertRaises(ValueError):
+            normalize_url("ftp://example.com")
+        with self.assertRaises(ValueError):
+            normalize_url("https://user:pass@example.com")
+
+    def test_fetch_many_success_and_order(self):
+        def mock_transport(request: httpx.Request) -> httpx.Response:
+            body = json.loads(request.content)
+            url = body["url"]
+            return httpx.Response(
+                200,
+                json={"title": f"Title for {url}", "content": f"Content for {url}"},
+            )
+
+        transport = httpx.MockTransport(mock_transport)
+        with httpx.Client(transport=transport, base_url="https://api.deepseek.com") as http_client:
+            client = DeepSeekClient(api_key="sk-test", client=http_client)
+            urls = [
+                "https://example.com/1",
+                "example.com/2",
+                "https://example.com/3",
+            ]
+            results = client.fetch_many(urls, max_workers=3)
+            self.assertEqual(len(results), 3)
+            self.assertEqual(results[0][0], "https://example.com/1")
+            self.assertEqual(results[1][0], "https://example.com/2")
+            self.assertEqual(results[2][0], "https://example.com/3")
+            r0 = results[0][1]
+            r1 = results[1][1]
+            r2 = results[2][1]
+            assert isinstance(r0, FetchResponse)
+            assert isinstance(r1, FetchResponse)
+            assert isinstance(r2, FetchResponse)
+            self.assertEqual(r0.title, "Title for https://example.com/1")
+            self.assertEqual(r1.title, "Title for https://example.com/2")
+            self.assertEqual(r2.title, "Title for https://example.com/3")
+
+    def test_fetch_many_isolated_errors(self):
+        def mock_transport(request: httpx.Request) -> httpx.Response:
+            body = json.loads(request.content)
+            url = body["url"]
+            if "fail" in url:
+                return httpx.Response(404, json={"error": {"message": "Not found"}})
+            return httpx.Response(200, json={"title": "Success", "content": "OK"})
+
+        transport = httpx.MockTransport(mock_transport)
+        with httpx.Client(transport=transport, base_url="https://api.deepseek.com") as http_client:
+            client = DeepSeekClient(api_key="sk-test", client=http_client, max_retries=0)
+            urls = ["https://example.com/ok", "https://example.com/fail"]
+            results = client.fetch_many(urls, max_workers=2)
+            self.assertEqual(len(results), 2)
+            self.assertIsInstance(results[0][1], FetchResponse)
+            self.assertIsInstance(results[1][1], DeepSeekAPIError)
+
+    def test_retry_after_header_handling(self):
+        calls = 0
+
+        def mock_transport(request: httpx.Request) -> httpx.Response:
+            nonlocal calls
+            calls += 1
+            if calls == 1:
+                return httpx.Response(
+                    429,
+                    headers={"Retry-After": "0.01"},
+                    json={"error": {"message": "Rate limit exceeded"}},
+                )
             return httpx.Response(200, json={"results": []})
 
         transport = httpx.MockTransport(mock_transport)

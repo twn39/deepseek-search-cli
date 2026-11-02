@@ -1,0 +1,8 @@
+{
+  "include": ["src", "tests"],
+  "exclude": [".venv", "dist", ".ruff_cache"],
+  "output": ".codegraph",
+  "languages": ["python"],
+  "cache": true
+}
+
