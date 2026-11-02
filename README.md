@@ -72,6 +72,11 @@ deepseek-search config set --base-url "https://api.deepseek.com"
 
 # 7. 清除已保存的全局 API Key
 deepseek-search config logout
+
+# 8. 管理持久化站点黑名单（例如全局排除 csdn.net 等低质站点）
+deepseek-search config blacklist add csdn.net
+deepseek-search config blacklist list
+deepseek-search config blacklist remove csdn.net
 ```
 
 #### ② 通过环境变量配置
@@ -115,6 +120,12 @@ deepseek-search search "DeepSeek 价格" --ori-question "DeepSeek 现在的 API 
 ```bash
 # 限定在 github.com 和 huggingface.co 搜索 2025 年以后的中文结果
 deepseek-search search "DeepSeek" --site github.com --site huggingface.co --lang zh --after 2025
+
+# 单次临时排除 csdn 站点
+deepseek-search search "Python 异步并发" --exclude-site csdn.net
+
+# 若已配置全局黑名单，可通过 --no-blacklist 临时跳过过滤
+deepseek-search search "CSDN 某个旧帖子" --no-blacklist
 ```
 
 #### 切换输出格式与保存文件
@@ -166,6 +177,28 @@ deepseek-search fetch "https://api-docs.deepseek.com/zh-cn/guides/search" -o doc
 # 以 JSON 格式输出包含标题和正文的数据
 deepseek-search fetch "https://example.com/article" --format json
 ```
+
+---
+
+### 3. 一键安装 AI Agent 技能 (`skills`)
+
+本项目遵循官方 **Agent Skills** 规范，内置标准 `deepseek-search` 技能，支持一键安装到各主流 AI 编程助手平台（Antigravity、Claude Code、Cursor、Codex、Crush 等）：
+
+```bash
+# 一键安装技能到所有支持的 AI Agent 平台（全局生效）
+deepseek-search skills install
+
+# 快捷别名命令
+deepseek-search install-skill
+
+# 仅安装到指定的平台（如 Claude Code 与 Cursor）
+deepseek-search skills install --target claude,cursor
+
+# 安装到当前工作目录本地（实现项目隔离）
+deepseek-search skills install --local
+```
+
+安装后，AI 智能体可在检索实时资讯、抓取在线文档或排查错误时，自动调用 `deepseek-search` 工具完成高质量检索。
 
 ---
 

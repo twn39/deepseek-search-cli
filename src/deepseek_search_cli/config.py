@@ -165,3 +165,64 @@ def resolve_base_url(cli_url: str | None = None) -> str:
         return cfg_url.rstrip("/")
 
     return DEFAULT_BASE_URL
+
+
+def clean_domain_name(domain: str) -> str:
+    """Clean and extract host domain from user input (e.g. 'https://csdn.net/foo' -> 'csdn.net')."""
+    d = domain.strip().lower()
+    if d.startswith(("http://", "https://")):
+        d = d.split("://", 1)[1]
+    return d.split("/")[0].split(":")[0]
+
+
+def resolve_blacklist() -> list[str]:
+    """Resolve persistent blacklist of excluded sites.
+
+    Precedence:
+    1. DEEPSEEK_EXCLUDE_SITES env var (comma-separated)
+    2. Global config file (key: 'exclude_sites', list of strings)
+    """
+    load_dotenv_if_exists()
+    env_blacklist = os.getenv("DEEPSEEK_EXCLUDE_SITES", "").strip()
+    if env_blacklist:
+        return [clean_domain_name(s) for s in env_blacklist.split(",") if s.strip()]
+
+    file_cfg = load_file_config()
+    cfg_blacklist = file_cfg.get("exclude_sites")
+    if isinstance(cfg_blacklist, list):
+        return [clean_domain_name(str(s)) for s in cfg_blacklist if str(s).strip()]
+    elif isinstance(cfg_blacklist, str) and cfg_blacklist.strip():
+        return [clean_domain_name(s) for s in cfg_blacklist.split(",") if s.strip()]
+
+    return []
+
+
+def add_to_blacklist(domain: str) -> list[str]:
+    """Add a domain to global blacklist in config.json."""
+    clean_d = clean_domain_name(domain)
+    if not clean_d:
+        raise ValueError("域名不能为空。")
+    current = resolve_blacklist()
+    if clean_d not in current:
+        current.append(clean_d)
+        save_file_config({"exclude_sites": current})
+    return current
+
+
+def remove_from_blacklist(domain: str) -> list[str]:
+    """Remove a domain from global blacklist in config.json."""
+    clean_d = clean_domain_name(domain)
+    current = resolve_blacklist()
+    if clean_d in current:
+        current.remove(clean_d)
+        save_file_config({"exclude_sites": current})
+    return current
+
+
+def clear_blacklist() -> None:
+    """Clear all domains in global blacklist."""
+    cfg = load_file_config()
+    if "exclude_sites" in cfg:
+        del cfg["exclude_sites"]
+        config_file = get_config_file()
+        config_file.write_text(json.dumps(cfg, indent=2, ensure_ascii=False), encoding="utf-8")

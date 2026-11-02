@@ -15,11 +15,16 @@ from deepseek_search_cli.client import (
     DeepSeekClient,
 )
 from deepseek_search_cli.config import (
+    add_to_blacklist,
+    clean_domain_name,
+    clear_blacklist,
     get_api_key_source,
     get_config_file,
     load_file_config,
+    remove_from_blacklist,
     resolve_api_key,
     resolve_base_url,
+    resolve_blacklist,
     save_file_config,
     save_local_env,
 )
@@ -35,6 +40,7 @@ from deepseek_search_cli.formatters import (
     format_search_results_urls,
     status_spinner,
 )
+from deepseek_search_cli.installer import install_skills, skills_app
 from deepseek_search_cli.models import FetchResponse
 from deepseek_search_cli.query import build_search_query
 
@@ -150,6 +156,13 @@ def search_command(
             help="排除站点 (例如 csdn.net，可多次指定)",
         ),
     ] = None,
+    no_blacklist: Annotated[
+        bool,
+        typer.Option(
+            "--no-blacklist",
+            help="本次搜索忽略已配置的持久化站点黑名单",
+        ),
+    ] = False,
     lang: Annotated[
         str | None,
         typer.Option(
@@ -219,10 +232,17 @@ def search_command(
         ),
     ] = 30.0,
 ) -> None:
+    merged_exclude = list(exclude_site or [])
+    if not no_blacklist:
+        persisted = resolve_blacklist()
+        for d in persisted:
+            if d not in merged_exclude:
+                merged_exclude.append(d)
+
     final_query = _build_augmented_query(
         query=query,
         site=site,
-        exclude_site=exclude_site,
+        exclude_site=merged_exclude or None,
         lang=lang,
         after=after,
         before=before,
@@ -487,6 +507,28 @@ config_app = typer.Typer(
     no_args_is_help=True,
 )
 app.add_typer(config_app, name="config")
+app.add_typer(skills_app, name="skills")
+
+
+@app.command("install-skill", help="快捷命令：将 deepseek-search 技能安装至 AI Agent 平台")
+def install_skill_alias(
+    target: Annotated[
+        str,
+        typer.Option(
+            "--target",
+            "-t",
+            help="目标 AI Agent 平台，支持: all, antigravity, claude, cursor, codex, crush",
+        ),
+    ] = "all",
+    global_install: Annotated[
+        bool,
+        typer.Option(
+            "--global/--local",
+            help="安装到用户全局配置 (默认) 还是当前项目本地",
+        ),
+    ] = True,
+) -> None:
+    install_skills(target=target, global_install=global_install)
 
 
 def _save_key_action(
@@ -665,11 +707,93 @@ def config_show() -> None:
     console.print(f"  • [bold]当前生效 Base URL:[/bold] {current_base}")
     console.print(f"  • [bold]当前生效 API Key:[/bold] {masked_key}")
     console.print(f"  • [bold]生效配置来源:[/bold] {source}")
+    blacklist = resolve_blacklist()
+    if blacklist:
+        console.print(f"  • [bold]排除站点黑名单:[/bold] {', '.join(blacklist)}")
+    else:
+        console.print("  • [bold]排除站点黑名单:[/bold] [dim](未配置)[/dim]")
 
 
 @config_app.command("path", help="显示配置文件的绝对路径")
 def config_path() -> None:
     console.print(str(get_config_file().resolve()))
+
+
+blacklist_app = typer.Typer(
+    help="管理默认排除的站点黑名单 (例如排除 csdn.net)",
+    no_args_is_help=False,
+)
+config_app.add_typer(blacklist_app, name="blacklist")
+
+
+@blacklist_app.callback(invoke_without_command=True)
+def blacklist_main(ctx: typer.Context) -> None:
+    """查看当前生效的搜索站点黑名单。"""
+    if ctx.invoked_subcommand is None:
+        blacklist = resolve_blacklist()
+        if not blacklist:
+            console.print("[yellow]当前未配置任何排除站点黑名单。[/yellow]")
+            console.print(
+                "[dim]提示: 可运行 'deepseek-search config blacklist add <domain>' 添加排除站点。[/dim]"
+            )
+            return
+
+        console.print(f"[bold cyan]当前搜索站点黑名单 ({len(blacklist)} 个)：[/bold cyan]")
+        for d in blacklist:
+            console.print(f"  • [red]-site:{d}[/red]")
+
+
+@blacklist_app.command("list", help="查看所有已配置的黑名单站点")
+def blacklist_list() -> None:
+    blacklist = resolve_blacklist()
+    if not blacklist:
+        console.print("[yellow]当前未配置任何排除站点黑名单。[/yellow]")
+        return
+    console.print(f"[bold cyan]当前搜索站点黑名单 ({len(blacklist)} 个)：[/bold cyan]")
+    for d in blacklist:
+        console.print(f"  • [red]-site:{d}[/red]")
+
+
+@blacklist_app.command("add", help="添加一个或多个站点域名至黑名单 (例如 csdn.net)")
+def blacklist_add(
+    domains: Annotated[
+        list[str],
+        typer.Argument(help="要排除的站点域名 (例如 csdn.net，支持传入多个)"),
+    ],
+) -> None:
+    added: list[str] = []
+    for d in domains:
+        try:
+            add_to_blacklist(d)
+            added.append(clean_domain_name(d))
+        except ValueError as e:
+            err_console.print(f"[bold red]错误:[/bold red] {e}")
+
+    if added:
+        console.print(f"[bold green]✓ 成功将以下站点添加至黑名单:[/bold green] {', '.join(added)}")
+        console.print(
+            f"[dim]已保存至 {get_config_file()}，未来所有搜索将默认附加 -site 自动排除。[/dim]"
+        )
+
+
+@blacklist_app.command("remove", help="从黑名单中移除指定的站点域名")
+def blacklist_remove(
+    domains: Annotated[
+        list[str],
+        typer.Argument(help="要移除的站点域名 (例如 csdn.net)"),
+    ],
+) -> None:
+    removed: list[str] = []
+    for d in domains:
+        remove_from_blacklist(d)
+        removed.append(clean_domain_name(d))
+    console.print(f"[bold green]✓ 已从黑名单中移除:[/bold green] {', '.join(removed)}")
+
+
+@blacklist_app.command("clear", help="清空所有的站点黑名单")
+def blacklist_clear() -> None:
+    clear_blacklist()
+    console.print("[bold green]✓ 站点黑名单已清空。[/bold green]")
 
 
 def main() -> None:

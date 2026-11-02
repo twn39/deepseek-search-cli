@@ -387,6 +387,67 @@ class TestCLI(unittest.TestCase):
             max_workers=5,
         )
 
+    @patch("deepseek_search_cli.cli.resolve_blacklist", return_value=["csdn.net"])
+    @patch("deepseek_search_cli.cli.DeepSeekClient")
+    def test_search_with_persistent_blacklist(self, mock_client_cls, mock_resolve_bl):
+        mock_instance = mock_client_cls.return_value
+        mock_instance.__enter__.return_value = mock_instance
+        mock_instance.search.return_value = SearchResponse(results=[])
+
+        result = runner.invoke(app, ["search", "Python 教程", "--api-key", "sk-dummy"])
+        self.assertEqual(result.exit_code, 0)
+        mock_instance.search.assert_called_once_with(
+            query="Python 教程 -site:csdn.net",
+            count=10,
+            need_content=False,
+            ori_question=None,
+            localization=None,
+        )
+
+    @patch("deepseek_search_cli.cli.resolve_blacklist", return_value=["csdn.net"])
+    @patch("deepseek_search_cli.cli.DeepSeekClient")
+    def test_search_with_no_blacklist_flag(self, mock_client_cls, mock_resolve_bl):
+        mock_instance = mock_client_cls.return_value
+        mock_instance.__enter__.return_value = mock_instance
+        mock_instance.search.return_value = SearchResponse(results=[])
+
+        result = runner.invoke(
+            app, ["search", "Python 教程", "--no-blacklist", "--api-key", "sk-dummy"]
+        )
+        self.assertEqual(result.exit_code, 0)
+        mock_instance.search.assert_called_once_with(
+            query="Python 教程",
+            count=10,
+            need_content=False,
+            ori_question=None,
+            localization=None,
+        )
+
+    @patch("deepseek_search_cli.cli.add_to_blacklist")
+    @patch("deepseek_search_cli.cli.resolve_blacklist", return_value=["csdn.net"])
+    @patch("deepseek_search_cli.cli.remove_from_blacklist")
+    @patch("deepseek_search_cli.cli.clear_blacklist")
+    def test_config_blacklist_commands(self, mock_clear, mock_remove, mock_resolve_bl, mock_add):
+        # 1. list
+        res_list = runner.invoke(app, ["config", "blacklist", "list"])
+        self.assertEqual(res_list.exit_code, 0)
+        self.assertIn("-site:csdn.net", res_list.output)
+
+        # 2. add
+        res_add = runner.invoke(app, ["config", "blacklist", "add", "baidu.com"])
+        self.assertEqual(res_add.exit_code, 0)
+        mock_add.assert_called_once_with("baidu.com")
+
+        # 3. remove
+        res_remove = runner.invoke(app, ["config", "blacklist", "remove", "csdn.net"])
+        self.assertEqual(res_remove.exit_code, 0)
+        mock_remove.assert_called_once_with("csdn.net")
+
+        # 4. clear
+        res_clear = runner.invoke(app, ["config", "blacklist", "clear"])
+        self.assertEqual(res_clear.exit_code, 0)
+        mock_clear.assert_called_once()
+
 
 if __name__ == "__main__":
     unittest.main()

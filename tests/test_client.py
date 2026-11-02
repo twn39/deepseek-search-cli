@@ -9,6 +9,7 @@ from deepseek_search_cli.client import (
     DeepSeekClient,
     normalize_url,
 )
+from deepseek_search_cli.config import clean_domain_name, resolve_blacklist
 from deepseek_search_cli.models import FetchResponse
 
 
@@ -237,6 +238,17 @@ class TestDeepSeekClient(unittest.TestCase):
             res = client.search("test")
             self.assertEqual(len(res.results), 0)
             self.assertEqual(calls, 2)
+
+    def test_clean_domain_name(self):
+        self.assertEqual(clean_domain_name("csdn.net"), "csdn.net")
+        self.assertEqual(clean_domain_name("https://blog.csdn.net/abc"), "blog.csdn.net")
+        self.assertEqual(clean_domain_name("http://example.com:8080/foo"), "example.com")
+        self.assertEqual(clean_domain_name("  ZHIIHU.COM/  "), "zhiihu.com")
+
+    def test_resolve_blacklist_from_env(self):
+        with patch.dict("os.environ", {"DEEPSEEK_EXCLUDE_SITES": "csdn.net, zhihu.com, "}):
+            bl = resolve_blacklist()
+            self.assertEqual(bl, ["csdn.net", "zhihu.com"])
 
 
 if __name__ == "__main__":
