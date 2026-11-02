@@ -1,6 +1,6 @@
 [project]
 name = "deepseek-search-cli"
-version = "0.1.0"
+version = "1.0.0"
 description = "DeepSeek Search and Fetch CLI tool based on httpx and typer"
 readme = "README.md"
 license = "MIT"
@@ -18,7 +18,7 @@ keywords = [
     "rag",
 ]
 classifiers = [
-    "Development Status :: 4 - Beta",
+    "Development Status :: 5 - Production/Stable",
     "Environment :: Console",
     "Intended Audience :: Developers",
     "Operating System :: OS Independent",

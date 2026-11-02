@@ -98,7 +98,7 @@ class DeepSeekClient:
         headers = {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",
-            "User-Agent": "deepseek-search-cli/0.1.0",
+            "User-Agent": "deepseek-search-cli/1.0.0",
         }
 
         if client is not None:
@@ -124,7 +124,7 @@ class DeepSeekClient:
         headers = {
             "Authorization": f"Bearer {clean_key}",
             "Content-Type": "application/json",
-            "User-Agent": "deepseek-search-cli/0.1.0",
+            "User-Agent": "deepseek-search-cli/1.0.0",
         }
         try:
             with httpx.Client(base_url=target_url, headers=headers, timeout=10.0) as client:

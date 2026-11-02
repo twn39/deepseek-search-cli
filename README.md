@@ -74,9 +74,11 @@ deepseek-search config set --base-url "https://api.deepseek.com"
 deepseek-search config logout
 
 # 8. 管理持久化站点黑名单（例如全局排除 csdn.net 等低质站点）
+deepseek-search config blacklist default      # 一键应用官方推荐黑名单 (csdn, jb51, 360doc, baidu)
 deepseek-search config blacklist add csdn.net
 deepseek-search config blacklist list
 deepseek-search config blacklist remove csdn.net
+deepseek-search config blacklist clear
 ```
 
 #### ② 通过环境变量配置
