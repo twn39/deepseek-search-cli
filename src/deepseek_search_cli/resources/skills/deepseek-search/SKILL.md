@@ -74,7 +74,26 @@ Operators can be written directly in the query or via dedicated flags:
 deepseek-search search "uv package manager" --site docs.astral.sh --after 2025
 ```
 
-> **Constraint**: Total query string (keyword + operators) must be `<= 128` characters.
+#### ⚠️ Critical Constraint: 128-Character Query Length Limit
+
+DeepSeek Search API strictly enforces a **hard limit of 128 characters** on the total query string. Exceeding this limit will trigger a client-side pre-flight error before making any network request.
+
+- **What counts towards the 128 characters**:
+  - The actual search keywords and quoted phrases.
+  - Manual operators (e.g. `site:github.com`, `lang:zh`, `after:2025`).
+  - **Persistent blacklist operators**: Any configured blacklist domains (e.g. ` -site:csdn.net` takes 15 characters) are automatically concatenated to the final query. With default `csdn.net` excluded, you have **113 characters** for your search terms.
+
+- **Best Practices for AI Agents**:
+  1. **Distill, don't dump**: Do NOT paste whole conversational requests, full exception stack traces, or long code snippets into `<query>`. Distill to 3~6 high-signal keywords and exact symbols (e.g. `"AVCaptureDevice" "isAdjustingFocus" KVO`).
+  2. **Use `--ori-question` for semantic context**: DeepSeek supports a separate `ori_question` parameter (up to 128 chars) to steer re-ranking. **It does NOT consume the search query's 128-character budget**:
+     ```bash
+     deepseek-search search "AVCaptureDevice focus KVO" -q "How to observe camera focus state changes in AVFoundation?"
+     ```
+  3. **Reclaim budget with `--no-blacklist`**: If a query contains long symbol names and approaches the limit, add `--no-blacklist` to temporarily disable blacklist injection:
+     ```bash
+     deepseek-search search '"AVCaptureDevice" "isAdjustingFocus" "isAdjustingExposure" KVO focus' --no-blacklist
+     ```
+  4. **Immediate error recovery**: If you receive `错误: 搜索语句总长度为 N 个字符，超过 DeepSeek 128 字符上限！`, immediately trim non-essential keywords, remove redundant quotes, or append `--no-blacklist`.
 
 ---
 
